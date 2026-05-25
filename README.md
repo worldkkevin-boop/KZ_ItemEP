@@ -6,6 +6,24 @@ Desenvolvido para o servidor **SandWorlds** (interface 11200 / build 5875).
 
 ---
 
+## Status por Classe
+
+| Classe | Status | Specs |
+|---|---|---|
+| Rogue | ✅ OK | Combat Swords, Combat Daggers |
+| Warrior | 🧪 Em teste | Fury, Arms, Protection (Threat), Protection (Mitigation) |
+| Druid | 🧪 Em teste | Feral DPS, Feral Tank, Bear Tank, Restoration |
+| Hunter | 🧪 Em teste | MM / BM, Survival |
+| Mage | 🧪 Em teste | Mage DPS |
+| Warlock | 🧪 Em teste | SM/Ruin, Destruction |
+| Shaman | 🧪 Em teste | Enhancement, Restoration |
+| Paladin | 🧪 Em teste | Retribution, Holy, Protection |
+| Priest | 🧪 Em teste | Holy, Shadow |
+
+> Se voce testou uma classe e os pesos estao corretos, abre uma issue ou manda mensagem para atualizarmos o status!
+
+---
+
 ## O que esta incluido
 
 | Addon | Funcao |
