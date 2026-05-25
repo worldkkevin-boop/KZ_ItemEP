@@ -1,0 +1,12 @@
+﻿## Interface: 11200
+## Title: |cFF2ecc40KZ|r |cFFFFD700ItemEP|r
+## Notes: Mostra o valor EP dos itens no tooltip com pesos de stats customizados.
+## Author: Kevinzinho & Antigravity (base: Kylosandrax)
+## Version: 1.3.0-ptBR-112d
+## Dependencies: KZ_BonusScanner
+## SavedVariables: VRB_SETTINGS, VRB_PROC_DB
+
+VanillaRatingBuster.lua
+VRBMenu.lua
+VanillaRatingBusterWeights.lua
+KZ_Compare.lua

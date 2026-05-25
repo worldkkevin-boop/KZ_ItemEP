@@ -1,0 +1,8 @@
+﻿## Interface: 11200
+## Title: |cFF2ecc40KZ|r BonusScanner
+## Notes: Escaneia equipamentos e soma os bonus de itens. Necessario para o KZ_ItemEP.
+## Author: Kevinzinho & Antigravity (base: crowley@headshot.de)
+## Version: 1.2.0-ptBR-112d
+## SavedVariables:
+## Dependencies:
+BonusScanner.xml
