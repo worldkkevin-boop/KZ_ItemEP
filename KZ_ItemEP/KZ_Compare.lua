@@ -7,9 +7,9 @@ local KZC_W    = 420
 local KZC_PAD  = 8
 local KZC_HALF = 192
 
-local KZC_H_COMPARE = 360
+local KZC_H_COMPARE = 375
 
--- ── nomes curtos por spec ────────────────────────────────────────
+-- ── nomes curtos por spec (fallback) ────────────────────────────
 local KZC_SPEC_SHORT = {
     ["RogueCombatSwords"]    = "CS",   ["RogueCombatDaggers"]   = "CD",
     ["WarriorFury-EP"]       = "Fury", ["WarriorThreat-EP"]     = "Prot",
@@ -23,6 +23,16 @@ local KZC_SPEC_SHORT = {
     ["PaladinHEP"]           = "Holy", ["PaladinProtEH"]        = "Prot",
     ["PriestHoly"]           = "Holy", ["PriestHolyLong"]       = "HolyL",
     ["PriestShadow"]         = "Shad",
+}
+
+-- ── nomes médios para linhas de EP (cabe em ~192px) ──────────────
+local KZC_SPEC_LABEL = {
+    ["RogueCombatSwords"]    = "Cbt Swords",
+    ["RogueCombatDaggers"]   = "Cbt Daggers",
+    ["HunterSurvival"]       = "Survival",
+    ["WarriorThreat-EP"]     = "Prot(THR)",
+    ["WarriorMitigation-EP"] = "Prot(MIT)",
+    ["PriestHolyLong"]       = "Holy Long",
 }
 
 -- ── nomes de display por spec ────────────────────────────────────
@@ -102,12 +112,12 @@ KZCSepTop:SetTexture(0.8, 0.6, 0.0, 0.6)
 -- rodapé da aba Comparar (escondido nas outras abas)
 local KZCSepBot = KZCFrame:CreateTexture(nil, "ARTWORK")
 KZCSepBot:SetHeight(1)
-KZCSepBot:SetPoint("BOTTOMLEFT",  KZCFrame, "BOTTOMLEFT",  6, 32)
-KZCSepBot:SetPoint("BOTTOMRIGHT", KZCFrame, "BOTTOMRIGHT", -6, 32)
+KZCSepBot:SetPoint("BOTTOMLEFT",  KZCFrame, "BOTTOMLEFT",  6, 42)
+KZCSepBot:SetPoint("BOTTOMRIGHT", KZCFrame, "BOTTOMRIGHT", -6, 42)
 KZCSepBot:SetTexture(0.4, 0.4, 0.4, 0.6)
 
 local KZCDiffFS = KZCFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-KZCDiffFS:SetPoint("BOTTOM", KZCFrame, "BOTTOM", 0, 10)
+KZCDiffFS:SetPoint("BOTTOM", KZCFrame, "BOTTOM", 0, 16)
 KZCDiffFS:SetWidth(KZC_W - 20)
 KZCDiffFS:SetJustifyH("CENTER")
 KZCDiffFS:SetText("|cffa0a0a0Capture dois itens para comparar|r")
@@ -236,7 +246,7 @@ local function KZCUpdateSpecLabel(slot)
     if not ui then return end
     local sp = KZCData[slot].selectedSpec
     if sp then
-        ui.specLabel:SetText("|cffFFD700" .. (KZC_SPEC_SHORT[sp] or sp:sub(1,5)) .. "|r")
+        ui.specLabel:SetText("|cffFFD700" .. (KZC_SPEC_DISPLAY[sp] or KZC_SPEC_SHORT[sp] or sp:sub(1,8)) .. "|r")
     else
         ui.specLabel:SetText("|cffa0a0a0(spec)|r")
     end
@@ -333,8 +343,8 @@ KZCUpdateDiff = function()
     local sA = KZCData[1].selectedSpec
     local sB = KZCData[2].selectedSpec
     KZCSpecFS:SetText(
-        "|cffa0a0a0A:|r |cffFFD700" .. (sA and (KZC_SPEC_SHORT[sA] or sA:sub(1,5)) or "?") .. "|r" ..
-        "   |cffa0a0a0B:|r |cffFFD700" .. (sB and (KZC_SPEC_SHORT[sB] or sB:sub(1,5)) or "?") .. "|r"
+        "|cffa0a0a0A:|r |cffFFD700" .. (sA and (KZC_SPEC_LABEL[sA] or KZC_SPEC_DISPLAY[sA] or KZC_SPEC_SHORT[sA] or sA:sub(1,8)) or "?") .. "|r" ..
+        "   |cffa0a0a0B:|r |cffFFD700" .. (sB and (KZC_SPEC_LABEL[sB] or KZC_SPEC_DISPLAY[sB] or KZC_SPEC_SHORT[sB] or sB:sub(1,8)) or "?") .. "|r"
     )
     local ep1, ep2 = KZCData[1].ep, KZCData[2].ep
     local oh1, oh2 = KZCData[1].ep_oh, KZCData[2].ep_oh
@@ -344,14 +354,23 @@ KZCUpdateDiff = function()
         else KZCDiffFS:SetText("|cffa0a0a0Capture dois itens para comparar|r") end
         return
     end
-    local function cmpLine(pre, v1, v2)
+    local function cmpLine(label, v1, v2)
         local d = v1 - v2
-        if     d >  0.5 then return pre .. "|cff00ff00A +" .. string.format("%.2f", d)  .. " EP|r"
-        elseif d < -0.5 then return pre .. "|cffff6666B +" .. string.format("%.2f", -d) .. " EP|r"
-        else                  return pre .. "|cffffff00= iguais|r" end
+        local aWins = d > 0.5
+        local bWins = d < -0.5
+        local cA = aWins and "ff00ff00" or (bWins and "ff666666" or "ffFFD700")
+        local cB = bWins and "ff00ff00" or (aWins and "ff666666" or "ffFFD700")
+        local diff
+        if     aWins then diff = "|cff00ff00 A +" .. math.floor(d  + 0.5) .. "|r"
+        elseif bWins then diff = "|cffff5555 B +" .. math.floor(-d + 0.5) .. "|r"
+        else               diff = "|cffffff00 iguais|r" end
+        return label ..
+            "|cff888888A:|r|c"..cA..math.floor(v1+0.5).."|r " ..
+            "|cff888888B:|r|c"..cB..math.floor(v2+0.5).."|r" ..
+            diff
     end
-    local txt = cmpLine("|cffa0a0a0MH:|r ", ep1, ep2)
-    if oh1 and oh2 then txt = txt .. "\n" .. cmpLine("|cffa0a0a0OH:|r ", oh1, oh2) end
+    local txt = cmpLine("|cffFFD700MH|r ", ep1, ep2)
+    if oh1 and oh2 then txt = txt .. "\n" .. cmpLine("|cff88ccffOH|r ", oh1, oh2) end
     KZCDiffFS:SetText(txt)
 end
 
@@ -455,11 +474,30 @@ KZCLoadSlot = function(slot)
 
     local iName, iQuality, iTexture
     local function tryInfo(arg)
-        local n, _, _, _, _, _, _, q, _, t = GetItemInfo(arg)
-        if n then iName=n; iQuality=q; iTexture=t end
+        local n, _, c, _, _, _, _, p8, p9, p10 = GetItemInfo(arg)
+        if n then
+            iName = n
+            if c and type(c) == "number" then iQuality = c end
+            -- Neste servidor GetItemInfo pode retornar 9 ou 10 valores:
+            -- 9 valores: ...,equipLoc(str),texture  → texture em p9
+            -- 10 valores: ...,maxStack(num),equipLoc(str),texture → texture em p10
+            local t
+            if type(p8) == "string" then
+                t = p9  -- sem maxStack, texture na pos 9
+            else
+                t = p10 -- com maxStack, texture na pos 10
+            end
+            if t and t ~= "" and type(t) == "string" and not string.find(t, "^INVTYPE") then
+                iTexture = t
+            end
+        end
     end
-    tryInfo(d.link)
-    if not iName then tryInfo(bareLink) end
+    tryInfo(bareLink)
+    if not iName then tryInfo(d.link) end
+    if not iTexture then
+        local itemId = string.match(bareLink or "", "item:(%d+)")
+        if itemId then tryInfo(tonumber(itemId)) end
+    end
     if iName then d.name=iName; d.quality=iQuality or 1; d.texture=iTexture end
 
     local slotType = scanOk and KZCReadWeaponSlot() or nil
@@ -521,16 +559,18 @@ KZCLoadSlot = function(slot)
         if not row then break end
         local sd = d.ep_specs[i]
         if sd and sd.ep_mh and sd.ep_mh > 0 then
-            local short = KZC_SPEC_SHORT[sd.spec] or sd.spec:sub(1,5)
+            local lbl   = KZC_SPEC_LABEL[sd.spec] or KZC_SPEC_DISPLAY[sd.spec] or KZC_SPEC_SHORT[sd.spec] or sd.spec:sub(1,8)
             local isSel = (sd.spec == d.selectedSpec)
-            local cLbl  = isSel and "ffFFD700" or "ff999999"
-            local cMH   = isSel and "ffFFD700" or "ffbbbbbb"
-            local txt = "|c"..cLbl..short..":|r |c"..cMH..string.format("%.1f",sd.ep_mh).." MH|r"
+            local cLbl  = isSel and "ffFFD700" or "ff888888"
+            local cVal  = isSel and "ffFFD700" or "ffaaaaaa"
+            local mh = math.floor(sd.ep_mh + 0.5)
+            local vals = tostring(mh) .. " MH"
             if sd.ep_oh then
-                local cOH = isSel and "ff88ccff" or "ff7799bb"
-                txt = txt .. "  |c"..cOH..string.format("%.1f",sd.ep_oh).." OH|r"
+                local cOH = isSel and "ff88ccff" or "ff6688aa"
+                vals = vals .. "|r  |c"..cOH..math.floor(sd.ep_oh+0.5).." OH"
             end
-            if sd.proc > 0 then txt = txt .. " |cffa0a0a0+"..string.format("%.1f",sd.proc).."p|r" end
+            if sd.proc > 0 then vals = vals .. "|cffa0a0a0 +"..math.floor(sd.proc+0.5).."p" end
+            local txt = "|c"..cLbl..lbl..":|r |c"..cVal..vals.."|r"
             row:SetText(txt)
         else
             row:SetText("")

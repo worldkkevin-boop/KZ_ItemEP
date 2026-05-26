@@ -113,11 +113,35 @@ function VRBCalculateRatingDetailed(weightTable, bonuses)
   return VRBRound(baseScore, 2), breakdown
 end
 
+-- Formata EP sem decimais desnecessários (701.00 → 701, 22.59 → 22.6)
+function VRBFmtEP(n)
+    return tostring(math.floor(n + 0.5))
+end
+
+-- GS 0-1000 baseado no total EP vs BiS calibrado
+function VRBCalcGS(score, spec)
+    local maxScore = (VRB_MAX_SCORES_TOTAL and VRB_MAX_SCORES_TOTAL[spec]) or 750
+    local gs = math.floor(score / maxScore * 1000 + 0.5)
+    if gs > 1000 then gs = 1000 end
+    return gs
+end
+
 -- Grade SS/S/A/B/C/D/F com teto por slot
 function VRBGetGrade(score, weightTable, equipLoc)
   local maxScore
-  -- Teto por slot tem prioridade em todos os slots (calibrado pelo BiS do site)
-  if equipLoc and VRB_MAX_SCORES_SLOT and VRB_MAX_SCORES_SLOT[equipLoc] then
+  -- Teto de arma por spec (Swords e Daggers tem MH/OH diferentes)
+  if equipLoc and VRB_MAX_SCORES_WEAPON and weightTable then
+    local isOH = equipLoc == "INVTYPE_WEAPONOFFHAND"
+    local isMH = equipLoc == "INVTYPE_WEAPON" or equipLoc == "INVTYPE_WEAPONMAINHAND"
+    if isOH or isMH then
+      local sw = VRB_MAX_SCORES_WEAPON[weightTable]
+      if sw then
+        maxScore = isOH and sw.oh or sw.mh
+      end
+    end
+  end
+  -- Teto por slot (fallback para armas sem spec e demais slots)
+  if not maxScore and equipLoc and VRB_MAX_SCORES_SLOT and VRB_MAX_SCORES_SLOT[equipLoc] then
     maxScore = VRB_MAX_SCORES_SLOT[equipLoc]
   end
   if not maxScore then
@@ -149,19 +173,16 @@ function VRBGetGradeTotal(score, weightTable)
   return "F"
 end
 function VRBGradeColor(grade)
-  if grade == "SS" then return 1.0, 0.50, 0.0 end
-  if grade == "S"  then return 0.0, 1.0, 0.0  end
-  if grade == "A"  then return 0.27,0.87, 0.0 end
-  if grade == "B"  then return 1.0, 0.85, 0.0 end
-  if grade == "C"  then return 1.0, 0.55, 0.0 end
-  if grade == "D"  then return 1.0, 0.30, 0.0 end
-  return 1.0, 0.15, 0.15
+    if grade == "SS" then return 1.0,  0.12,  0.12 end  -- ff1f1f vermelho
+    if grade == "S"  then return 1.0,  0.55,  0.0  end  -- ff8c00 laranja
+    if grade == "A"  then return 0.64, 0.21,  0.93 end  -- a335ee roxo
+    if grade == "B"  then return 0.0,  0.44,  0.87 end  -- 0070dd azul
+    if grade == "C"  then return 0.12, 1.0,   0.0  end  -- 1eff00 verde
+    if grade == "D"  then return 1.0,  1.0,   1.0  end  -- ffffff branco
+    return 0.5, 0.5, 0.5                                 -- 808080 cinza
 end
 function VRBGradeDisplay(grade)
-  local r, g, b = VRBGradeColor(grade)
-  local hex = string.format("ff%02x%02x%02x", r*255, g*255, b*255)
-  if grade == "SS" then return "|cffFF8C00[SS]|r |cffFFD700BiS|r" end
-  return "|c" .. hex .. "[" .. grade .. "]|r"
+    return ""  -- removido; cor aplicada diretamente no EP/GS
 end
 function VRBBuildBreakdownString(breakdown, maxStats)
   maxStats = maxStats or 4
@@ -196,7 +217,51 @@ function VRBBuildBreakdownString(breakdown, maxStats)
   return result, numLines
 end
 
--- Detecta tipo de slot pelo texto do tooltip (evita depender do cache de GetItemInfo)
+local function VRBStripColors(s)
+    if not s then return "" end
+    s = string.gsub(s, "|c%x+", "")
+    s = string.gsub(s, "|r", "")
+    -- Trim leading/trailing whitespace
+    s = string.gsub(s, "^%s+", "")
+    s = string.gsub(s, "%s+$", "")
+    return s
+end
+
+
+-- Detecta INVTYPE diretamente do texto do tooltip (independe do formato de GetItemInfo)
+local function VRBGuessEquipLoc(numLines, tooltipName)
+    for i = 1, numLines do
+        local leftObj = getglobal(tooltipName .. "TextLeft" .. i)
+        local txt = VRBStripColors(leftObj and leftObj:GetText())
+        if txt == "Head"     then return "INVTYPE_HEAD"     end
+        if txt == "Neck"     then return "INVTYPE_NECK"     end
+        if txt == "Shoulder" then return "INVTYPE_SHOULDER" end
+        if txt == "Back"     then return "INVTYPE_CLOAK"    end
+        if txt == "Chest"    then return "INVTYPE_CHEST"    end
+        if txt == "Wrist"    then return "INVTYPE_WRIST"    end
+        if txt == "Hands"    then return "INVTYPE_HAND"     end
+        if txt == "Waist"    then return "INVTYPE_WAIST"    end
+        if txt == "Legs"     then return "INVTYPE_LEGS"     end
+        if txt == "Feet"     then return "INVTYPE_FEET"     end
+        if txt == "Finger"   then return "INVTYPE_FINGER"   end
+        if txt == "Trinket"  then return "INVTYPE_TRINKET"  end
+        if txt == "Shield"   then return "INVTYPE_SHIELD"   end
+        if string.find(txt, "^Off Hand")  then return "INVTYPE_WEAPONOFFHAND"  end
+        if string.find(txt, "^Main Hand") then return "INVTYPE_WEAPONMAINHAND" end
+        if string.find(txt, "^Two%-Hand") or string.find(txt, "^Two Hand") then return "INVTYPE_2HWEAPON" end
+        if string.find(txt, "^One%-Hand") or string.find(txt, "^Held In Off") then return "INVTYPE_WEAPON" end
+        if txt == "Ranged" or txt == "Thrown" or string.find(txt, "^Ranged") then return "INVTYPE_RANGED" end
+        if txt == "Gun" or txt == "Bow" or txt == "Crossbow" or txt == "Wand" then return "INVTYPE_RANGED" end
+        local rightObj = getglobal(tooltipName .. "TextRight" .. i)
+        local rtxt = VRBStripColors(rightObj and rightObj:GetText())
+        if rtxt == "Bow" or rtxt == "Gun" or rtxt == "Crossbow" or rtxt == "Wand" or rtxt == "Thrown" then return "INVTYPE_RANGED" end
+        if rtxt == "Polearm" or rtxt == "Staff" or string.find(rtxt, "^Two%-Handed") then return "INVTYPE_2HWEAPON" end
+        if rtxt == "Sword" or rtxt == "Mace" or rtxt == "Axe" or rtxt == "Dagger" or rtxt == "Fist Weapon" then return "INVTYPE_WEAPON" end
+    end
+    return nil
+end
+
+-- Detecta slot de arma (legado — mantido para VRBScanItemEP weapon DPS injection)
 local function VRBGuessWeaponSlot(numLines, tooltipName)
     for i = 1, numLines do
         local leftObj  = getglobal(tooltipName .. "TextLeft"  .. i)
@@ -365,9 +430,17 @@ GameTooltip.SetBagItem = function(this, bag, slot)
   VRB_CURRENT_ITEM_LINK = GetContainerItemLink(bag, slot)
   return _origSetBagItem(this, bag, slot)
 end
+VRB_SLOT_EP_CACHE = {}   -- [slotId] = {link=..., ep={[spec]=score}}
+VRB_HOVERED_SLOT_ID = nil
+local VRBInvListener = CreateFrame("Frame")
+VRBInvListener:RegisterEvent("UNIT_INVENTORY_CHANGED")
+VRBInvListener:SetScript("OnEvent", function()
+    if arg1 == "player" then VRB_SLOT_EP_CACHE = {} end
+end)
 local _origSetInventoryItem = GameTooltip.SetInventoryItem
 GameTooltip.SetInventoryItem = function(this, unit, slot)
   VRB_CURRENT_ITEM_LINK = GetInventoryItemLink(unit, slot)
+  if unit == "player" then VRB_HOVERED_SLOT_ID = slot else VRB_HOVERED_SLOT_ID = nil end
   return _origSetInventoryItem(this, unit, slot)
 end
 local _origSetHyperlink = GameTooltip.SetHyperlink
@@ -379,7 +452,8 @@ end
 local _origTooltipHide = GameTooltip:GetScript("OnHide")
 GameTooltip:SetScript("OnHide", function()
     VRB_CURRENT_ITEM_LINK = nil
-VRBEquippedEPCache = {}  -- Cache EP do item equipado (preenchido pelo ShoppingTooltip1)
+    VRB_HOVERED_SLOT_ID = nil
+    VRBEquippedEPCache = {}
     if _origTooltipHide then _origTooltipHide() end
 end)
 
@@ -387,7 +461,7 @@ end)
 -- VRBEPFrame: frame separado ao lado do tooltip
 -- Resolve problema de tooltips longos (Bonescythe set etc.)
 -- -------------------------------------------------------
-local VRB_FRAME_W = 280
+local VRB_FRAME_W = 190
 
 local VRBEPFrame = CreateFrame("Frame", "VRBEPFrame", UIParent)
 VRBEPFrame:SetWidth(VRB_FRAME_W)
@@ -482,25 +556,19 @@ VRBItemScoreTooltip:SetScript("OnShow", function(self)
     local bonuses = BonusScanner.temp.bonuses
     if not bonuses then VRBEPFrame:Hide() return end
 
-    -- equipLoc via GetItemInfo (posição 8 pode ser stackCount neste servidor — só usa se string)
-    local currentEquipLoc = nil
-    if VRB_CURRENT_ITEM_LINK then
-        local _, _, _, _, _, _, _, loc = GetItemInfo(VRB_CURRENT_ITEM_LINK)
-        if type(loc) == "string" and loc ~= "" then currentEquipLoc = loc end
-    end
-    -- Prioriza leitura do tooltip para armas ranged/offhand serem detectadas corretamente
-    local weaponSlot = VRBGuessWeaponSlot(lines, "GameTooltip")
-                       or currentEquipLoc
+    -- Detecta equipLoc pelo texto do tooltip (GetItemInfo nao retorna INVTYPE_ neste servidor)
+    local gradeEquipLoc = VRBGuessEquipLoc(lines, "GameTooltip")
     -- Refina INVTYPE_WEAPON → MH ou OH verificando qual slot o item esta equipado
-    if weaponSlot == "INVTYPE_WEAPON" and VRB_CURRENT_ITEM_LINK then
+    if gradeEquipLoc == "INVTYPE_WEAPON" and VRB_CURRENT_ITEM_LINK then
         local ohLink = GetInventoryItemLink("player", 17)
         local mhLink = GetInventoryItemLink("player", 16)
         if ohLink and ohLink == VRB_CURRENT_ITEM_LINK then
-            weaponSlot = "INVTYPE_WEAPONOFFHAND"
+            gradeEquipLoc = "INVTYPE_WEAPONOFFHAND"
         elseif mhLink and mhLink == VRB_CURRENT_ITEM_LINK then
-            weaponSlot = "INVTYPE_WEAPONMAINHAND"
+            gradeEquipLoc = "INVTYPE_WEAPONMAINHAND"
         end
     end
+    local weaponSlot = gradeEquipLoc
     if weaponSlot then
         VRBInjectWeaponStats(bonuses, lines, "GameTooltip", weaponSlot)
     end
@@ -514,10 +582,6 @@ VRBItemScoreTooltip:SetScript("OnShow", function(self)
     local lbl1 = getglobal("GameTooltipTextLeft1")
     if lbl1 then itemName = lbl1:GetText() end
     if itemName and itemName ~= "" then VRB_LAST_ITEM_NAME = itemName end
-
-    -- gradeEquipLoc: prefere slot detectado (inclui fallback de texto) para armas
-    local gradeEquipLoc = weaponSlot or currentEquipLoc
-
 
     -- Salva dados para rebuild quando cache do equipado chegar
     VRBHoveredEPData = {
@@ -558,12 +622,21 @@ VRBItemScoreTooltip:SetScript("OnShow", function(self)
           breakdown["BONUS"] = { ep = procEP, raw = procEP }
       end
 
+      -- Cache EP por slot para o Total EP frame usar (evita rediscrepancia com tooltip oculto)
+      if VRB_HOVERED_SLOT_ID and vrbscore > 0 then
+          local sl = VRB_HOVERED_SLOT_ID
+          if not VRB_SLOT_EP_CACHE[sl] then
+              VRB_SLOT_EP_CACHE[sl] = {link = VRB_CURRENT_ITEM_LINK, ep = {}}
+          end
+          VRB_SLOT_EP_CACHE[sl].ep[r] = vrbscore
+      end
+
       if vrbscore > 0 then
         local normalizedLabel = string.gsub(r, className, "")
         local grade = VRBGetGrade(vrbscore, r, gradeEquipLoc)
 
         if hasScore then
-          frameLines = frameLines .. "|cffa0a0a0" .. string.rep("-", 26) .. "|r\n"
+          frameLines = frameLines .. "|cffa0a0a0" .. string.rep("-", 20) .. "|r\n"
           lineCount = lineCount + 1
         end
 
@@ -574,25 +647,21 @@ VRBItemScoreTooltip:SetScript("OnShow", function(self)
         if equippedEP and equippedEP > 0 then
           local diff = vrbscore - equippedEP
           if diff > 0.5 then
-            compStr = " |cff00ee44" .. string.format("%+.1f", diff) .. " EP|r"
+            compStr = " |cff00ee44(+" .. math.floor(diff + 0.5) .. ")|r"
           elseif diff < -0.5 then
-            compStr = " |cffff4444" .. string.format("%.1f", diff) .. " EP|r"
+            compStr = " |cffff4444(" .. math.floor(diff - 0.5) .. ")|r"
           else
             compStr = " |cffa0a0a0= igual|r"
           end
         end
 
+        local gradeR, gradeG, gradeB = VRBGradeColor(grade)
+        local gradeHex = string.format("ff%02x%02x%02x", gradeR*255, gradeG*255, gradeB*255)
         frameLines = frameLines ..
           "|c" .. colorHex .. normalizedLabel .. ":|r " ..
-          "|cffFFD700" .. vrbscore .. " EP|r  " ..
-          VRBGradeDisplay(grade) .. compStr .. "\n"
+          "|c" .. gradeHex .. VRBFmtEP(vrbscore) .. " EP [" .. grade .. "]|r" ..
+          compStr .. "\n"
         lineCount = lineCount + 1
-
-        local breakdownStr, breakdownLines = VRBBuildBreakdownString(breakdown, 4)
-        if breakdownStr ~= "" then
-          frameLines = frameLines .. "|cffa0a0a0" .. breakdownStr .. "|r\n"
-          lineCount = lineCount + (breakdownLines or 1)
-        end
 
         hasScore = true
       end
@@ -692,7 +761,7 @@ local function VRBScanComparisonTooltip(tooltipFrame, frameName)
             local grade = VRBGetGrade(score, r, cmpWeaponSlot)
 
             if hasScore then
-                frameLines = frameLines .. "|cffa0a0a0" .. string.rep("-", 26) .. "|r\n"
+                frameLines = frameLines .. "|cffa0a0a0" .. string.rep("-", 20) .. "|r\n"
                 lineCount = lineCount + 1
             end
 
@@ -712,10 +781,12 @@ local function VRBScanComparisonTooltip(tooltipFrame, frameName)
                 end
             end
 
+            local sgr, sgg, sgb = VRBGradeColor(grade)
+            local sghex = string.format("ff%02x%02x%02x", sgr*255, sgg*255, sgb*255)
             frameLines = frameLines ..
                 "|c" .. colorHex .. normalizedLabel .. ":|r " ..
-                "|cffFFD700" .. score .. " EP|r  " ..
-                VRBGradeDisplay(grade) .. specLabel .. "\n"
+                "|c" .. sghex .. VRBFmtEP(score) .. " EP|r" ..
+                specLabel .. "\n"
             lineCount = lineCount + 1
             hasScore = true
         end
@@ -804,7 +875,7 @@ local function VRBScanComparisonTooltip(tooltipFrame, frameName)
                     local grade = VRBGetGrade(specScore, spec, d.equipLoc)
 
                     if not firstSpec then
-                        newLines = newLines .. "|cffa0a0a0" .. string.rep("-", 26) .. "|r\n"
+                        newLines = newLines .. "|cffa0a0a0" .. string.rep("-", 20) .. "|r\n"
                         lineCount2 = lineCount2 + 1
                     end
                     firstSpec = false
@@ -815,25 +886,21 @@ local function VRBScanComparisonTooltip(tooltipFrame, frameName)
                     if eqEP and eqEP > 0 then
                         local diff = specScore - eqEP
                         if diff > 0.5 then
-                            compStr = "  |cff00ee44+" .. VRBRound(diff, 1) .. " EP|r"
+                            compStr = " |cff00ee44(+" .. math.floor(diff + 0.5) .. ")|r"
                         elseif diff < -0.5 then
-                            compStr = "  |cffff4444" .. VRBRound(diff, 1) .. " EP|r"
+                            compStr = " |cffff4444(" .. math.floor(diff - 0.5) .. ")|r"
                         else
-                            compStr = "  |cffa0a0a0= igual|r"
+                            compStr = " |cffa0a0a0= igual|r"
                         end
                     end
 
+                    local igr, igg, igb = VRBGradeColor(grade)
+                    local ighex = string.format("ff%02x%02x%02x", igr*255, igg*255, igb*255)
                     newLines = newLines ..
                         "|c" .. d.colorHex .. label .. ":|r " ..
-                        "|cffFFD700" .. specScore .. " EP|r  " ..
-                        VRBGradeDisplay(grade) .. compStr .. "\n"
+                        "|c" .. ighex .. VRBFmtEP(specScore) .. " EP [" .. grade .. "]|r" ..
+                        compStr .. "\n"
                     lineCount2 = lineCount2 + 1
-
-                    local bkStr, bkLines = VRBBuildBreakdownString(breakdown, 4)
-                    if bkStr ~= "" then
-                        newLines = newLines .. "|cffa0a0a0" .. bkStr .. "|r\n"
-                        lineCount2 = lineCount2 + (bkLines or 1)
-                    end
                 end
             end
 
@@ -898,8 +965,11 @@ VRBTotalFrame:SetBackdrop({
     tile=true, tileSize=16, edgeSize=12,
     insets={left=3,right=3,top=3,bottom=3}
 })
-VRBTotalFrame:SetBackdropColor(0,0,0,0.75)
-VRBTotalFrame:SetBackdropBorderColor(0.4,0.4,0.4,0.8)
+VRBTotalFrame:SetBackdropColor(0.05,0.04,0.02,1.0)
+VRBTotalFrame:SetBackdropBorderColor(0.8,0.65,0.0,1.0)
+local VRBTotalBg = VRBTotalFrame:CreateTexture(nil,"BACKGROUND")
+VRBTotalBg:SetAllPoints(VRBTotalFrame)
+VRBTotalBg:SetTexture(0.05,0.04,0.02,1.0)
 VRBTotalFrame:Hide()
 
 local VRBTotalTitle = VRBTotalFrame:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
@@ -908,8 +978,27 @@ VRBTotalTitle:SetJustifyH("LEFT")
 local VRBTotalText = VRBTotalFrame:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
 VRBTotalText:SetPoint("TOPLEFT",VRBTotalFrame,"TOPLEFT",6,-18)
 VRBTotalText:SetJustifyH("LEFT")
+VRBTotalText:SetWidth(218)
+local VRBSlotsText = VRBTotalFrame:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+VRBSlotsText:SetPoint("TOPLEFT",VRBTotalFrame,"TOPLEFT",6,-18)
+VRBSlotsText:SetJustifyH("LEFT")
+VRBSlotsText:SetWidth(218)
 local VRBOverallText = VRBTotalFrame:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
 VRBOverallText:SetPoint("BOTTOMLEFT",VRBTotalFrame,"BOTTOMLEFT",6,5)
+
+-- mapa slot-id → INVTYPE para grade por slot
+local VRB_SLOT_INVTYPE = {
+    [1]="INVTYPE_HEAD",    [2]="INVTYPE_NECK",     [3]="INVTYPE_SHOULDER",
+    [5]="INVTYPE_CHEST",   [6]="INVTYPE_WAIST",    [7]="INVTYPE_LEGS",
+    [8]="INVTYPE_FEET",    [9]="INVTYPE_WRIST",    [10]="INVTYPE_HAND",
+    [11]="INVTYPE_FINGER", [12]="INVTYPE_FINGER",  [13]="INVTYPE_TRINKET",
+    [14]="INVTYPE_TRINKET",[15]="INVTYPE_CLOAK",   [16]="INVTYPE_WEAPON",
+    [17]="INVTYPE_WEAPONOFFHAND",
+}
+local VRB_SLOT_LIST = {
+    {1,"Hd"},{2,"Nk"},{3,"Sh"},{15,"Bk"},{5,"Ch"},{9,"Wr"},{10,"Hn"},{6,"Ws"},
+    {7,"Lg"},{8,"Ft"},{11,"R1"},{12,"R2"},{13,"T1"},{14,"T2"},{16,"MH"},{17,"OH"},
+}
 VRBOverallText:SetJustifyH("LEFT")
 
 local VRBController = CreateFrame("Frame","VRBController",UIParent)
@@ -930,7 +1019,7 @@ VRBController:SetScript("OnUpdate", function()
     local className, classFileName = UnitClass("player")
     local color = RAID_CLASS_COLORS[classFileName] or {r=1,g=1,b=0}
     local colorHex = string.format("ff%02x%02x%02x",color.r*255,color.g*255,color.b*255)
-    VRBTotalTitle:SetText("|c"..colorHex.."Total EP Equipado|r  |cffa0a0a0(arraste)|r")
+    VRBTotalTitle:SetText("|c"..colorHex.."KZ ItemEP|r  |cffa0a0a0Total Equipado  (arraste)|r")
     local augBonuses = VRBBuildAugmentedBonuses()
     local lines = ""
     local hasScore = false
@@ -939,19 +1028,69 @@ VRBController:SetScript("OnUpdate", function()
     for _, r in ipairs(ratings) do
         local score = VRBCalculateRating(r, augBonuses)
         if score > 0 then
-            local label = string.gsub(r, className, "")
+            local dispName = (VRB_SPEC_DISPLAY and VRB_SPEC_DISPLAY[r])
+                          or string.gsub(r, className, "")
             local grade = VRBGetGradeTotal(score, r)
-            lines = lines .. "|cffd0d0d0" .. label .. ":|r " .. score .. " EP  " .. VRBGradeDisplay(grade) .. "\n"
+            local gr, gg, gb = VRBGradeColor(grade)
+            local ghex = string.format("ff%02x%02x%02x", gr*255, gg*255, gb*255)
+            lines = lines ..
+                "|cffa0a0a0" .. dispName .. "|r   " ..
+                "|c" .. ghex .. math.floor(score + 0.5) .. " GS|r\n"
             hasScore = true
             if score > bestScore then bestScore = score; bestSpec = r end
         end
     end
     if hasScore then
+        -- spec lines
+        local specLineCount = 0
+        for _ in string.gfind(lines, "\n") do specLineCount = specLineCount + 1 end
+        VRBTotalText:SetPoint("TOPLEFT",VRBTotalFrame,"TOPLEFT",6,-18)
         VRBTotalText:SetText(lines)
+
+        -- slot grades para o melhor spec
+        local slotRow1, slotRow2 = "", ""
+        for i, sd in ipairs(VRB_SLOT_LIST) do
+            local slotId, slotName = sd[1], sd[2]
+            local link = GetInventoryItemLink("player", slotId)
+            local entry
+            if link then
+                local ep
+                local cached = VRB_SLOT_EP_CACHE and VRB_SLOT_EP_CACHE[slotId]
+                if cached and cached.link == link and cached.ep and cached.ep[bestSpec] then
+                    ep = cached.ep[bestSpec]
+                else
+                    ep = VRBScanItemEP(link, bestSpec) or 0
+                    -- Salva no cache para nao re-escanear todo segundo
+                    if not VRB_SLOT_EP_CACHE[slotId] or VRB_SLOT_EP_CACHE[slotId].link ~= link then
+                        VRB_SLOT_EP_CACHE[slotId] = {link=link, ep={}}
+                    end
+                    VRB_SLOT_EP_CACHE[slotId].ep[bestSpec] = ep
+                end
+                local g = VRBGetGrade(ep, bestSpec, VRB_SLOT_INVTYPE[slotId])
+                local cr, cg, cb = VRBGradeColor(g)
+                local hex = string.format("ff%02x%02x%02x", cr*255, cg*255, cb*255)
+                entry = "|c"..hex..slotName.."|r"
+            else
+                entry = "|cff383838"..slotName.."|r"
+            end
+            if i <= 8 then slotRow1 = slotRow1 .. entry .. " "
+            else            slotRow2 = slotRow2 .. entry .. " " end
+        end
+        local slotsY = -18 - specLineCount * 14 - 8
+        VRBSlotsText:ClearAllPoints()
+        VRBSlotsText:SetPoint("TOPLEFT",VRBTotalFrame,"TOPLEFT",6, slotsY)
+        VRBSlotsText:SetText(slotRow1 .. "\n" .. slotRow2)
+
         local overallGrade = VRBGetGradeTotal(bestScore, bestSpec)
-        VRBOverallText:SetText("|cffa0a0a0Gear:|r  " .. VRBGradeDisplay(overallGrade))
+        local br, bg2, bb = VRBGradeColor(overallGrade)
+        local bhex = string.format("ff%02x%02x%02x", br*255, bg2*255, bb*255)
+        VRBOverallText:SetText(
+            "|cffa0a0a0GS  |r|c" .. bhex .. math.floor(bestScore + 0.5) .. "|r"
+        )
+        VRBTotalFrame:SetHeight(18 + specLineCount * 14 + 6 + 28 + 20)
     else
-        VRBTotalTitle:SetText("") VRBTotalText:SetText("") VRBOverallText:SetText("")
+        VRBTotalTitle:SetText("") VRBTotalText:SetText("")
+        VRBSlotsText:SetText("")  VRBOverallText:SetText("")
     end
 end)
 

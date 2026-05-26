@@ -272,36 +272,39 @@ VRB_CUSTOM_ITEMS = {
 }
 
 -- Teto de EP por slot de equipamento (calibrado pelo BiS de cada slot)
--- Permite que itens BiS de slots menores (neck, ring) recebam [S] ou [SS]
--- em vez de serem penalizados por ter menos stats que chest/head
--- Teto por slot = BiS_EP / 0.95  (BiS aparece como [SS])
--- Fonte: ranking Combat Swords Rogue + pesos atuais VRB_WEIGHTS (AGI incluida)
--- NOTA: valores antigos excluiam AGI (peso era 0). Recalibrado com AGI=0.9792.
+-- Teto por slot = EP do BiS do slot (BiS aparece como SS, 95%+ do BiS = SS tambem)
+-- Fonte: melhores itens do servidor SandWorlds por slot, calculado com pesos VRB_WEIGHTS
 VRB_MAX_SCORES_SLOT = {
-    -- Armadura (Bonescythe T3 = set BiS CS Rogue Naxx, exceto onde indicado)
-    ["INVTYPE_HEAD"]            = 91,    -- Bonescythe Helmet 86.21 (29*AGI+2*Crit+30*AP+1*Hit)
-    ["INVTYPE_CHEST"]           = 117,   -- Bonescythe Breastplate 111.21 (29*AGI+2*Crit+80*AP+1*Hit)
-    ["INVTYPE_ROBE"]            = 117,
-    ["INVTYPE_LEGS"]            = 73,    -- Bonescythe Legplates 69.39 (25*AGI+1*Crit+32*AP+1*Hit)
-    ["INVTYPE_SHOULDER"]        = 57,    -- Bonescythe Pauldrons 54.60 (15*AGI+1*Crit+22*AP+1*Hit)
-    ["INVTYPE_HAND"]            = 111,   -- Edgemaster's Handguards 105 EP (7*15 sword skill)
-    ["INVTYPE_FEET"]            = 83,    -- Bonescythe Sabatons 78.54 (18*AGI+1*Crit+64*AP+1*Hit)
-    ["INVTYPE_WAIST"]           = 85,    -- Belt of Never-ending Agony 80.50 (20*AGI+1*Crit+64*AP+1*Hit)
-    ["INVTYPE_WRIST"]           = 43,    -- Bonescythe Bracers 40.61 (14*AGI+1*Crit+26*AP)
+    -- Armadura
+    ["INVTYPE_HEAD"]            = 111,
+    ["INVTYPE_CHEST"]           = 83,
+    ["INVTYPE_ROBE"]            = 83,
+    ["INVTYPE_LEGS"]            = 76,
+    ["INVTYPE_SHOULDER"]        = 62,
+    ["INVTYPE_HAND"]            = 96,
+    ["INVTYPE_FEET"]            = 61,
+    ["INVTYPE_WAIST"]           = 89,
+    ["INVTYPE_WRIST"]           = 39,
     -- Acessorios
-    ["INVTYPE_NECK"]            = 47,    -- Prestor's Talisman of Connivery 44.4
-    ["INVTYPE_CLOAK"]           = 52,    -- Shroud of Dominion 49.67 (11*AGI+1*Crit+50*AP)
-    ["INVTYPE_FINGER"]          = 58,    -- Band of Unnatural Forces 54.91 (1*Crit+52*AP+1*Hit)
-    ["INVTYPE_TRINKET"]         = 118,   -- Vanquished Tentacle de C'Thun 111.56
-    -- Armas 1H (CS Rogue: Hungering Cold + 6*sword_skill=90 = 532.81 EP)
-    ["INVTYPE_WEAPON"]          = 561,   -- Hungering Cold 532.81 (DPS+spd+14*AGI+6*sword_skill)
-    ["INVTYPE_WEAPONMAINHAND"]  = 561,
-    ["INVTYPE_WEAPONOFFHAND"]   = 264,   -- Gressil 250.59 (73DPS*OHDPS+2.7spd+15*AGI+40*AP)
+    ["INVTYPE_NECK"]            = 44,
+    ["INVTYPE_CLOAK"]           = 39,
+    ["INVTYPE_FINGER"]          = 55,
+    ["INVTYPE_TRINKET"]         = 112,
+    -- Armas (fallback genericos — override por spec em VRB_MAX_SCORES_WEAPON)
+    ["INVTYPE_WEAPON"]          = 609,
+    ["INVTYPE_WEAPONMAINHAND"]  = 609,
+    ["INVTYPE_WEAPONOFFHAND"]   = 423,
     ["INVTYPE_HOLDABLE"]        = 65,
     ["INVTYPE_SHIELD"]          = 100,
     ["INVTYPE_2HWEAPON"]        = 900,
-    ["INVTYPE_RANGED"]          = 1980,  -- Hunter MM BiS: Ashjre'thul (56.38DPS,2.9spd)=1881EP (RANGEDDPS=31.29,RANGEDSPEED=40.48)
+    ["INVTYPE_RANGED"]          = 1980,
     ["INVTYPE_RELIC"]           = 50,
+}
+
+-- Teto de arma por spec (MH e OH diferem entre Swords e Daggers)
+VRB_MAX_SCORES_WEAPON = {
+    ["RogueCombatSwords"]  = {mh=609, oh=423},
+    ["RogueCombatDaggers"] = {mh=457, oh=253},
 }
 
 VRB_WEIGHTS = {
